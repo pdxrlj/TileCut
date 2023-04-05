@@ -1,5 +1,6 @@
+use gdal::programs::raster::build_vrt;
 use gdal::Dataset;
-use gdal_sys::{CPLErr, GDALResampleAlg};
+use gdal_sys::{CPLErr, GDALCreateWarpedVRT, GDALResampleAlg};
 use std::f64::consts::PI;
 use std::path::PathBuf;
 use std::ptr::{null, null_mut};
@@ -81,6 +82,25 @@ impl Utils {
         if rv != CPLErr::CE_None {
             eprintln!("err:{}", rv);
         }
+
+        let datasets = vec![self.data_set, out_put];
+        let papszArgv = vec!["-r", "near"];
+        let psOptionsForBinary =
+            unsafe { gdal_sys::GDALWarpAppOptionsNew(papszArgv.as_ptr(), null_mut()) };
+        let dest = driver
+            .create(
+                PathBuf::from("demo.vrt"),
+                x.try_into().unwrap(),
+                y.try_into().unwrap(),
+                self.data_set.rasterband(1).unwrap().band_type() as isize,
+            )
+            .unwrap();
+        let restData = build_vrt(
+            dest,
+            &datasets,
+            Some(unsafe { gdal_sys::GDALBuildVRTOptionsNew(papszArgv, psOptionsForBinary) }),
+        )
+        .unwrap();
 
         out_put.flush_cache();
     }
