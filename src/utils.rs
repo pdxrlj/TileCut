@@ -1,7 +1,8 @@
-use gdal::raster::ResampleAlg;
 use gdal::Dataset;
+use gdal_sys::{CPLErr, GDALResampleAlg};
 use std::f64::consts::PI;
 use std::path::PathBuf;
+use std::ptr::{null, null_mut};
 
 #[warn(unused_variables)]
 pub struct Utils {
@@ -9,7 +10,7 @@ pub struct Utils {
     pub initial_resolution: f64,
 }
 
-#[warn(unused_variables)]
+#[allow(dead_code)]
 impl Utils {
     pub fn new(path: PathBuf) -> Self {
         let data_set = Dataset::open(path)
@@ -44,7 +45,7 @@ impl Utils {
         );
         println!("重采样后的大小为：{}*{}", x, y);
 
-        let mut outPut = driver
+        let mut out_put = driver
             .create(
                 path,
                 x.try_into().unwrap(),
@@ -57,27 +58,31 @@ impl Utils {
 
         let geo_transform: [f64; 6] = [x, resolution, xr, yx, yr, -resolution];
 
-        outPut.set_geo_transform(&geo_transform).unwrap();
-        outPut
+        out_put.set_geo_transform(&geo_transform).unwrap();
+        out_put
             .set_projection(self.data_set.projection().as_str())
             .unwrap();
 
-        gdal::Driver:: (
-            &self.data_set,
-            &mut outPut,
-            None,
-            None,
-            ResampleAlg::NearestNeighbour,
-            None,
-        );
+        // gdal::raster::reproject(&self.data_set, &out_put).unwrap();
+        let rv = unsafe {
+            gdal_sys::GDALReprojectImage(
+                self.data_set.c_dataset(),
+                null(),
+                out_put.c_dataset(),
+                null(),
+                GDALResampleAlg::GRA_NearestNeighbour,
+                0.0,
+                0.0,
+                None,
+                null_mut(),
+                null_mut(),
+            )
+        };
+        if rv != CPLErr::CE_None {
+            eprintln!("err:{}", rv);
+        }
 
-        // let _ = gdal::raster::rasterize(
-        //     &mut outPut,
-        //     &self.data_set.raster_count(),
-        //     Some(&options),
-        //     ResampleAlg::NearestNeighbour,
-
-        // ).unwrap();
+        out_put.flush_cache();
     }
 
     pub fn scale_zoom_size(
@@ -105,8 +110,8 @@ mod utils_test {
 
     #[test]
     fn resampling_raster_test() {
-        let path = PathBuf::from("converted.tif");
+        let path = PathBuf::from("demo.tif");
         let utils = Utils::new(path);
-        utils.resampling_raster(18, PathBuf::from("3.tif"));
+        utils.resampling_raster(30, PathBuf::from("3.tif"));
     }
 }
